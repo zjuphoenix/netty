@@ -24,15 +24,11 @@ import io.netty.util.internal.NativeLibraryLoader;
 import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
-import org.apache.tomcat.Apr;
-import org.apache.tomcat.jni.Buffer;
-import org.apache.tomcat.jni.Library;
-import org.apache.tomcat.jni.Pool;
-import org.apache.tomcat.jni.SSL;
-import org.apache.tomcat.jni.SSLContext;
+import io.netty.tcnative.jni.Buffer;
+import io.netty.tcnative.jni.Library;
+import io.netty.tcnative.jni.SSL;
+import io.netty.tcnative.jni.SSLContext;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
@@ -40,7 +36,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Locale;
-import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -84,7 +79,7 @@ public final class OpenSsl {
 
         // Test if netty-tcnative is in the classpath first.
         try {
-            Class.forName("org.apache.tomcat.jni.SSL", false, OpenSsl.class.getClassLoader());
+            Class.forName("io.netty.tcnative.jni.SSL", false, OpenSsl.class.getClassLoader());
         } catch (ClassNotFoundException t) {
             cause = t;
             logger.debug(
@@ -124,21 +119,14 @@ public final class OpenSsl {
             }
         }
 
-        if (cause == null && !isNettyTcnative()) {
-            logger.debug("incompatible tcnative in the classpath; "
-                    + OpenSslEngine.class.getSimpleName() + " will be unavailable.");
-            cause = new ClassNotFoundException("incompatible tcnative in the classpath");
-        }
-
         UNAVAILABILITY_CAUSE = cause;
 
         if (cause == null) {
             final Set<String> availableOpenSslCipherSuites = new LinkedHashSet<String>(128);
             boolean supportsKeyManagerFactory = false;
             boolean useKeyManagerFactory = false;
-            final long aprPool = Pool.create(0);
             try {
-                final long sslCtx = SSLContext.make(aprPool, SSL.SSL_PROTOCOL_ALL, SSL.SSL_MODE_SERVER);
+                final long sslCtx = SSLContext.make(SSL.SSL_PROTOCOL_ALL, SSL.SSL_MODE_SERVER);
                 long privateKeyBio = 0;
                 long certBio = 0;
                 try {
@@ -182,8 +170,6 @@ public final class OpenSsl {
                 }
             } catch (Exception e) {
                 logger.warn("Failed to get the list of available OpenSSL cipher suites.", e);
-            } finally {
-                Pool.destroy(aprPool);
             }
             AVAILABLE_OPENSSL_CIPHER_SUITES = Collections.unmodifiableSet(availableOpenSslCipherSuites);
 
@@ -214,32 +200,6 @@ public final class OpenSsl {
             SUPPORTS_KEYMANAGER_FACTORY = false;
             USE_KEYMANAGER_FACTORY = false;
         }
-    }
-
-    private static boolean isNettyTcnative() {
-        return AccessController.doPrivileged(new PrivilegedAction<Boolean>() {
-            @Override
-            public Boolean run() {
-                InputStream is = null;
-                try {
-                    is = Apr.class.getResourceAsStream("/org/apache/tomcat/apr.properties");
-                    Properties props = new Properties();
-                    props.load(is);
-                    String info = props.getProperty("tcn.info");
-                    return info != null && info.startsWith("netty-tcnative");
-                } catch (Throwable ignore) {
-                    return false;
-                } finally {
-                    if (is != null) {
-                        try {
-                            is.close();
-                        } catch (IOException ignore) {
-                            // ignore
-                        }
-                    }
-                }
-            }
-        });
     }
 
     /**
@@ -381,9 +341,8 @@ public final class OpenSsl {
             libNames.toArray(new String[libNames.size()]));
     }
 
-    private static void initializeTcNative() throws Exception {
-        Library.initialize("provided");
-        SSL.initialize(null);
+    private static boolean initializeTcNative() throws Exception {
+        return Library.initialize();
     }
 
     private static String normalizeOs(String value) {
