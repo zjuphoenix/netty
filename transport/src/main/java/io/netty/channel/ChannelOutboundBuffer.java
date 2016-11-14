@@ -121,18 +121,30 @@ public final class ChannelOutboundBuffer {
     /**
      * Add given message to this {@link ChannelOutboundBuffer}. The given {@link ChannelPromise} will be notified once
      * the message was written.
+     * 在channel.write时会调用该方法，每个channel有自己的一个channeloutboundbuffer
      */
     public void addMessage(Object msg, int size, ChannelPromise promise) {
         Entry entry = Entry.newInstance(msg, size, total(msg), promise);
         if (tailEntry == null) {
+            /**
+             * 添加第1个msg时，将添加的msg包成entry，作为链表tail
+             * 因为entry还没flush，所以flushedEntry设为null
+             */
             flushedEntry = null;
             tailEntry = entry;
         } else {
+            /**
+             * tail不为null，说明已经有msg在之前add进来了
+             * 将新add的entry连在之前tail的后面，作为新的tail
+             */
             Entry tail = tailEntry;
             tail.next = entry;
             tailEntry = entry;
         }
         if (unflushedEntry == null) {
+            /**
+             * 第1次add的entry，作为unflushedEntry
+             */
             unflushedEntry = entry;
         }
 
@@ -185,6 +197,9 @@ public final class ChannelOutboundBuffer {
         }
 
         long newWriteBufferSize = TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, size);
+        /**
+         * add的msg超过了高水位线
+         */
         if (newWriteBufferSize > channel.config().getWriteBufferHighWaterMark()) {
             setUnwritable(invokeLater);
         }
@@ -318,12 +333,18 @@ public final class ChannelOutboundBuffer {
     private void removeEntry(Entry e) {
         if (-- flushed == 0) {
             // processed everything
+            /**
+             * 所有buffer都已经发送完了
+             */
             flushedEntry = null;
             if (e == tailEntry) {
                 tailEntry = null;
                 unflushedEntry = null;
             }
         } else {
+            /**
+             * 更新flushedEntry为下一个entry
+             */
             flushedEntry = e.next;
         }
     }
@@ -331,9 +352,13 @@ public final class ChannelOutboundBuffer {
     /**
      * Removes the fully written entries and update the reader index of the partially written entry.
      * This operation assumes all messages in this buffer is {@link ByteBuf}.
+     *
      */
     public void removeBytes(long writtenBytes) {
         for (;;) {
+            /**
+             * 取出flushedEntry的msg，即待发送的第1个entry对应的msg
+             */
             Object msg = current();
             if (!(msg instanceof ByteBuf)) {
                 assert writtenBytes == 0;
@@ -342,15 +367,24 @@ public final class ChannelOutboundBuffer {
 
             final ByteBuf buf = (ByteBuf) msg;
             final int readerIndex = buf.readerIndex();
+            /**
+             * 这里的readableBytes即为该buffer上次待发送出去的字节数，但上次发送了writtenBytes字节数据
+             */
             final int readableBytes = buf.writerIndex() - readerIndex;
-
             if (readableBytes <= writtenBytes) {
+                /**
+                 * 需要发出的数据小于等于真正发送出去的数据量，说明上次发送了多个buffer的数据或单个完整的buffer，
+                 * 因此需要更新该entry的发送进度(progress(readableBytes);)，并且释放该buffer(remove()，更新待发送的entry为下一个)
+                 */
                 if (writtenBytes != 0) {
                     progress(readableBytes);
                     writtenBytes -= readableBytes;
                 }
                 remove();
             } else { // readableBytes > writtenBytes
+                /**
+                 * 当前buffer本来需要发送的数据量大于上次真正发送的数据量，说明上次没有发送完该buffer完整的包，只发送了部分，这种情况只需要更新该buffer发送进度即可
+                 */
                 if (writtenBytes != 0) {
                     buf.readerIndex(readerIndex + (int) writtenBytes);
                     progress(writtenBytes);
@@ -367,6 +401,9 @@ public final class ChannelOutboundBuffer {
         int count = nioBufferCount;
         if (count > 0) {
             nioBufferCount = 0;
+            /**
+             * 将NIO_BUFFERS中每个buffer置为null
+             */
             Arrays.fill(NIO_BUFFERS.get(), 0, count, null);
         }
     }
@@ -380,6 +417,10 @@ public final class ChannelOutboundBuffer {
      * {@link AbstractChannel#doWrite(ChannelOutboundBuffer)}.
      * Refer to {@link NioSocketChannel#doWrite(ChannelOutboundBuffer)} for an example.
      * </p>
+     *
+     * 每次doWrite发送数据写ChannelOutboundBuffer都要执行nioBuffers()
+     * 这个方法会统计buffer数组的个数nioBufferCount和可以发送的数据总量nioBufferSize，根据entry的msg更新entry的buf或bufs和count
+     * 通过channeloutboundbuffer添加msg时构造的entry并没有更新count、buf和bufs信息，在doWrite的时候才计算
      */
     public ByteBuffer[] nioBuffers() {
         long nioBufferSize = 0;
@@ -777,6 +818,9 @@ public final class ChannelOutboundBuffer {
         private final Handle handle;
         Entry next;
         Object msg;
+        /**
+         * 当该entry有多个ByteBuffer时会
+         */
         ByteBuffer[] bufs;
         ByteBuffer buf;
         ChannelPromise promise;

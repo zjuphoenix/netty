@@ -444,6 +444,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     return;
                 }
                 boolean firstRegistration = neverRegistered;
+                /**
+                 * 将channel注册到selector
+                 */
                 doRegister();
                 neverRegistered = false;
                 registered = true;
@@ -457,6 +460,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
                 if (isActive()) {
+                    /**
+                     * firstRegistration首次注册标识，只有第一次注册才会传播channel active事件
+                     */
                     if (firstRegistration) {
                         pipeline.fireChannelActive();
                     } else if (config().isAutoRead()) {
@@ -464,6 +470,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         // again so that we process inbound data.
                         //
                         // See https://github.com/netty/netty/issues/4805
+                        /**
+                         * netty默认是auto read，因此channel active后会触发一次读操作
+                         */
                         beginRead();
                     }
                 }
@@ -744,6 +753,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             int size;
             try {
                 msg = filterOutboundMessage(msg);
+                /**
+                 * pipeline.estimatorHandle()会得到DefaultMessageSizeEstimator，再调用size(msg)方法用于计算该msg的可写到网络的字节的数量，即该buf的可读字节数量
+                 * 如果msg为ByteBuf，那么返回该buf的可读字节数，即可以发送出去的字节数
+                 */
                 size = pipeline.estimatorHandle().size(msg);
                 if (size < 0) {
                     size = 0;
@@ -770,6 +783,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             flush0();
         }
 
+        /**
+         * 在NioEventLoop循环中，对于写事件，会执行flush0
+         */
         protected void flush0() {
             if (inFlush0) {
                 // Avoid re-entrance

@@ -145,6 +145,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         return childGroup;
     }
 
+    /**
+     * 该方法用于初始化创建的channel对象，channelfactory创建的channel
+     */
     @Override
     void init(Channel channel) throws Exception {
         final Map<ChannelOption<?>, Object> options = options();
@@ -161,9 +164,16 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             }
         }
 
+        /**
+         * channel一般为NioServerSocketChannel，pipeline为其父类AbstractChannel的成员，为DefaultChannelPipeline类型。
+         * DefaultChannelPipeline包含一个HeadContext和一个TailContext
+         */
         ChannelPipeline p = channel.pipeline();
 
         final EventLoopGroup currentChildGroup = childGroup;
+        /**
+         * 该childHandler一般为用户初始化ServerBootstrap时传入的ChannelInitializer
+         */
         final ChannelHandler currentChildHandler = childHandler;
         final Entry<ChannelOption<?>, Object>[] currentChildOptions;
         final Entry<AttributeKey<?>, Object>[] currentChildAttrs;
@@ -174,10 +184,17 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             currentChildAttrs = childAttrs.entrySet().toArray(newAttrArray(childAttrs.size()));
         }
 
+        /**
+         * 对于NioServerSocketChannel，最初只有一个LoggingHandler或没有，这里添加一个初始化handler(ChannelInitializer)
+         * 当触发ChannelInitializer这个handler注册事件时，会执行initChannel方法，再添加一个handler（ServerBootstrapAcceptor），这个handler用于将对于NioSocketChannel注册到work eventloop。
+         */
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(Channel ch) throws Exception {
                 final ChannelPipeline pipeline = ch.pipeline();
+                /**
+                 * 这里的handler为ServerBootstrap.handler传入的handler，一般为LoggingHandler或不设置
+                 */
                 ChannelHandler handler = handler();
                 if (handler != null) {
                     pipeline.addLast(handler);

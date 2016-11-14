@@ -186,9 +186,14 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         final AbstractChannelHandlerContext newCtx;
         synchronized (this) {
             checkMultiplicity(handler);
-
+            /**
+             * filterName(name, handler):如果name不为空则返回name，否则返回handler类的名字+"#0"
+             * 根据handler构造上下文DefaultChannelHandlerContext，
+             */
             newCtx = newContext(group, filterName(name, handler), handler);
-
+            /**
+             * 将该上下文放到HeadContext和TailContext之间
+             */
             addLast0(newCtx);
 
             // If the registered is false it means that the channel was not registered on an eventloop yet.

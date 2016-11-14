@@ -92,6 +92,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      * {@link Channel} implementation has no no-args constructor.
      */
     public B channel(Class<? extends C> channelClass) {
+        /**
+         * channelClass一般为NioServerSocketChannel
+         */
         if (channelClass == null) {
             throw new NullPointerException("channelClass");
         }
@@ -268,6 +271,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        /**
+         * 创建，初始化channel，将channel注册到selector
+         */
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
@@ -306,6 +312,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            /**
+             * 创建channel对象，一般为NioServerSocketChannel
+             */
             channel = channelFactory().newChannel();
             init(channel);
         } catch (Throwable t) {
@@ -317,6 +326,11 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
+        /**
+         * 在boss EventLoopGroup中注册该channel
+         * 从boss EventLoopGroup中选出一个EventLoop注册该channel ->SingleThreadEventLoop.register -> channel.unsafe().register
+         *
+         */
         ChannelFuture regFuture = group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
@@ -350,6 +364,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             @Override
             public void run() {
                 if (regFuture.isSuccess()) {
+                    /**
+                     * 从tail context到head context找到第一个outbound context，最终调到head context的bind方法，最终调用的是jdk的channel bind
+                     */
                     channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 } else {
                     promise.setFailure(regFuture.cause());
@@ -449,12 +466,18 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         private final Class<? extends T> clazz;
 
         BootstrapChannelFactory(Class<? extends T> clazz) {
+            /**
+             * clazz一般是NioServerSocketChannel.class
+             */
             this.clazz = clazz;
         }
 
         @Override
         public T newChannel() {
             try {
+                /**
+                 * 通过反射机制设置创建的channel类型，一般选择NioServerSocketChannel
+                 */
                 return clazz.newInstance();
             } catch (Throwable t) {
                 throw new ChannelException("Unable to create Channel from class " + clazz, t);
