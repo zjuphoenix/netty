@@ -94,6 +94,9 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
 
     /**
      * {@inheritDoc} If override this method ensure you call super!
+     * 调用场景1:NioServerSocketChannel注册到selector后会调到
+     *      即在AbstractChannel.register0方法中的pipeline.invokeHandlerAddedIfNeeded();这行代码中通过PendingHandlerAddedTask执行中调用
+     *      这个方法在NioServerSocketChannel注册到selector之后调用
      */
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
@@ -110,12 +113,20 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
     private boolean initChannel(ChannelHandlerContext ctx) throws Exception {
         if (initMap.putIfAbsent(ctx, Boolean.TRUE) == null) { // Guard against re-entrance.
             try {
+                /**
+                 * 对于NioServerSocketChannel，initChannel实现方法见ServerBootstrap.init方法里的匿名实现，具体是添加了通过ServerBootstrap.handler添加的handler和ServerBootstrapAcceptor
+                 * 对于NioSocketChannel，initChannel实现方法是用户在ServerBootstrap.childHandler方法里添加的handler的initChannel方法，具体是设置用户添加的handler
+                 */
                 initChannel((C) ctx.channel());
             } catch (Throwable cause) {
                 // Explicitly call exceptionCaught(...) as we removed the handler before calling initChannel(...).
                 // We do so to prevent multiple calls to initChannel(...).
                 exceptionCaught(ctx, cause);
             } finally {
+                /**
+                 * 执行完子类的initChannel方法后，需要把ChannelInitializer这个handler移除，因为这个handler的工作是为了初始化handler，初始化好后就不需要这个handler了
+                 * 也就是说，对于NioServerSocketChannel和NioSocketChannel，最开始只有ChannelInitializer这个handler，在channel注册成功后会执行这个handler的initChannel方法，这个handler用于初始化真正的业务handler，初始化好后就可以移除这个handler了
+                 */
                 remove(ctx);
             }
             return true;

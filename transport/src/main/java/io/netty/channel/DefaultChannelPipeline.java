@@ -186,9 +186,14 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         final AbstractChannelHandlerContext newCtx;
         synchronized (this) {
             checkMultiplicity(handler);
-
+            /**
+             * filterName(name, handler):如果name不为空则返回name，否则返回handler类的名字+"#0"
+             * 根据handler构造上下文DefaultChannelHandlerContext，
+             */
             newCtx = newContext(group, filterName(name, handler), handler);
-
+            /**
+             * 将该上下文放到HeadContext和TailContext之间
+             */
             addLast0(newCtx);
 
             // If the registered is false it means that the channel was not registered on an eventloop yet.
@@ -196,6 +201,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             // ChannelHandler.handlerAdded(...) once the channel is registered.
             if (!registered) {
                 newCtx.setAddPending();
+                /**
+                 * 初始化pipeline的pendingHandlerCallbackHead为PendingHandlerAddedTask
+                 * PendingHandlerAddedTask用于将LoggingHandler和ServerBootstrapAcceptor封装成context添加到pipeline中，并移除初始化用的ChannelIntializer
+                 * PendingHandlerAddedTask是在pipeline.addLast(newCtx)方法中初始化好的
+                 */
                 callHandlerCallbackLater(newCtx, true);
                 return this;
             }
@@ -579,7 +589,14 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     private void callHandlerAdded0(final AbstractChannelHandlerContext ctx) {
         try {
+            /**
+             * 这里的context是pipeline.addLast(context)时的context，而在初始化NioServerSocketChannel时只添加了初始化handler用的ChannelInitializer，
+             * 因此这里的ctx为初始化handler用的ChannelInitializer的context
+             */
             ctx.handler().handlerAdded(ctx);
+            /**
+             * 设置handlerState为ADD_COMPLETE
+             */
             ctx.setAddComplete();
         } catch (Throwable t) {
             boolean removed = false;
@@ -629,6 +646,10 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             firstRegistration = false;
             // We are now registered to the EventLoop. It's time to call the callbacks for the ChannelHandlers,
             // that were added before the registration was done.
+            /**
+             * 首次注册时执行该方法，这个方法会把通过ServerBootstrap.handler设置的LoggingHandler和ServerBootstrapAcceptort封装成DefaultChannelHandlerContext加入到pipeline中，
+             * 并移除初始化用的ChannelIntializer
+             */
             callHandlerAddedForAllHandlers();
         }
     }
@@ -1191,6 +1212,10 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         private final Unsafe unsafe;
 
         HeadContext(DefaultChannelPipeline pipeline) {
+            /**
+             * 注意这里的参数inbound为false，outbound为true
+             * HeadContext不是既实现了ChannelOutboundHandler也实现了ChannelInboundHandler么，为什么inbound为false
+             */
             super(pipeline, null, HEAD_NAME, false, true);
             unsafe = pipeline.channel().unsafe();
             setAddComplete();

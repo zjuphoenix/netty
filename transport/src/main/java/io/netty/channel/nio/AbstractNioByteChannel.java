@@ -116,11 +116,17 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 do {
                     byteBuf = allocHandle.allocate(allocator);
                     int writable = byteBuf.writableBytes();
+                    /**
+                     * client端socket缓冲区可以读到的字节数
+                     */
                     int localReadAmount = doReadBytes(byteBuf);
                     if (localReadAmount <= 0) {
                         // not was read release the buffer
                         byteBuf.release();
                         byteBuf = null;
+                        /**
+                         * localReadAmount < 0说明对端server已经关闭
+                         */
                         close = localReadAmount < 0;
                         break;
                     }
@@ -178,6 +184,11 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
         int writeSpinCount = -1;
 
+        /**
+         * 当发送缓冲区已经满，没能将完整数据包发送出去时，需要设置setOpWrite为true，
+         * 这样在因为缓冲区满不能将完整数据包发送出去提前退出循环后重新设置写感兴趣事件，
+         * 待下次可写事件发生时继续把剩下的数据包发送出去。
+         */
         boolean setOpWrite = false;
         for (;;) {
             Object msg = in.current();
@@ -202,13 +213,22 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                     writeSpinCount = config().getWriteSpinCount();
                 }
                 for (int i = writeSpinCount - 1; i >= 0; i --) {
+                    /**
+                     * 这里的localFlushedAmount是真正写入到channel的字节数
+                     */
                     int localFlushedAmount = doWriteBytes(buf);
                     if (localFlushedAmount == 0) {
+                        /**
+                         * 写入的字节数为0，说明channel的写缓冲区已满，不能再写入
+                         */
                         setOpWrite = true;
                         break;
                     }
 
                     flushedAmount += localFlushedAmount;
+                    /**
+                     * buf不可读说明写入buf的数据已经全部发送到channel
+                     */
                     if (!buf.isReadable()) {
                         done = true;
                         break;

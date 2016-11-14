@@ -369,6 +369,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap impleme
                 notifyHandlerException(t);
             }
         } else {
+            /**
+             * ？可能handler刚加到pipeline中，还没初始化完成，所以不会触发该handler的channelRead事件，向下传播
+             */
             fireChannelRead(msg);
         }
     }
@@ -485,6 +488,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap impleme
             return promise;
         }
 
+        /**
+         * 从tail向head找到第一个outbound context
+         */
         final AbstractChannelHandlerContext next = findContextOutbound();
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
@@ -672,6 +678,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap impleme
 
     @Override
     public ChannelHandlerContext read() {
+        /**
+         * 从tail(inbound)->channelintializer(inbound)->head(outbound)找到的第1个outbound为HeadContext
+         */
         final AbstractChannelHandlerContext next = findContextOutbound();
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {

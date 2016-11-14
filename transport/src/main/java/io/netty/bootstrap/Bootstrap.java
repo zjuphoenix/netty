@@ -179,6 +179,10 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     @SuppressWarnings("unchecked")
     void init(Channel channel) throws Exception {
         ChannelPipeline p = channel.pipeline();
+        /**
+         * handler()方法返回用户通过Bootstrap.handle方法设置的hanler，这个handler是ChannelIntializer类型，并不是真正的业务handler，
+         * 而是用来初始化业务handler pipeline的handler，其initChannel方法里为用户设置的初始化业务pipeline的逻辑
+         */
         p.addLast(handler());
 
         final Map<ChannelOption<?>, Object> options = options();

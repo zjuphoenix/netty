@@ -121,6 +121,11 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
         }
     }
 
+    /**
+     * 对于server端，在NioEventLoop循环中，写事件会触发doWrite
+     * @param in
+     * @throws Exception
+     */
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
         final SelectionKey key = selectionKey();

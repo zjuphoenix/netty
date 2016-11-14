@@ -78,6 +78,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     protected AbstractNioChannel(Channel parent, SelectableChannel ch, int readInterestOp) {
         super(parent);
         this.ch = ch;
+        //对于NioServerSocketChannel,readInterestOp为SelectionKey.OP_ACCEPT
         this.readInterestOp = readInterestOp;
         try {
             ch.configureBlocking(false);
@@ -335,6 +336,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         boolean selected = false;
         for (;;) {
             try {
+                /**
+                 * 每个channel会绑定一个eventloop，每个eventloop包含一个selector，用来管理该eventloop管理的每个channel的事件
+                 * 这里调用了jdk nio的channel注册到selector的方法
+                 */
                 selectionKey = javaChannel().register(eventLoop().selector, 0, this);
                 return;
             } catch (CancelledKeyException e) {
@@ -357,6 +362,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         eventLoop().cancel(selectionKey());
     }
 
+    /**
+     * 当channel活跃时和读数据完成时会调用该方法
+     * 注册感兴趣事件，对于NioServerSocketChannel，readInterestOp是accept事件，对于NioSocketChannel，readInterestOp是read事件
+     */
     @Override
     protected void doBeginRead() throws Exception {
         // Channel.read() or ChannelHandlerContext.read() was called

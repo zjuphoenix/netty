@@ -92,6 +92,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      * {@link Channel} implementation has no no-args constructor.
      */
     public B channel(Class<? extends C> channelClass) {
+        /**
+         * channelClass一般为NioServerSocketChannel
+         */
         if (channelClass == null) {
             throw new NullPointerException("channelClass");
         }
@@ -268,6 +271,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        /**
+         * 创建，初始化channel，将channel注册到selector
+         */
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
@@ -306,7 +312,15 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            /**
+             * 创建channel对象，server端为NioServerSocketChannel，client端为NioSocketChannel
+             */
             channel = channelFactory().newChannel();
+            /**
+             * init方法主要是初始化用户设置的初始化handler，这个handler为ChannelIntializer类型，
+             * server端通过ServerBootstrap.childHandler传入这个handler，除了这个handler，init方法也会把通过ServerBootstrap.handler传入的handler添加到pipeline
+             * client端通过Bootstrap.handler传入这个handler
+             */
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
@@ -317,6 +331,14 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
+        /**
+         * 对于server：
+         *      在boss EventLoopGroup中注册该channel（NioServerSocketChannel）
+         *      从boss EventLoopGroup中选出一个EventLoop注册该channel ->SingleThreadEventLoop.register -> channel.unsafe().register
+         * 对于client：
+         *      没有boss EventLoopGroup和worker EventLoopGroup之分，只有1个EventLoopGroup，会在这个EventLoopGroup注册该channel（NioSocketChannel）
+         *      会从EventLoopGroup中选择一个EventLoop来注册这个channel ->SingleThreadEventLoop.register -> channel.unsafe().register
+         */
         ChannelFuture regFuture = group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
@@ -350,6 +372,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             @Override
             public void run() {
                 if (regFuture.isSuccess()) {
+                    /**
+                     * 从tail context到head context找到第一个outbound context，最终调到head context的bind方法，最终调用的是jdk的channel bind
+                     */
                     channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 } else {
                     promise.setFailure(regFuture.cause());
@@ -449,12 +474,18 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         private final Class<? extends T> clazz;
 
         BootstrapChannelFactory(Class<? extends T> clazz) {
+            /**
+             * clazz一般是NioServerSocketChannel.class
+             */
             this.clazz = clazz;
         }
 
         @Override
         public T newChannel() {
             try {
+                /**
+                 * 通过反射机制设置创建的channel类型，一般选择NioServerSocketChannel
+                 */
                 return clazz.newInstance();
             } catch (Throwable t) {
                 throw new ChannelException("Unable to create Channel from class " + clazz, t);

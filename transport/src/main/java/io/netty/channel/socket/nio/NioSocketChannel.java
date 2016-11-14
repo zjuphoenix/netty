@@ -277,6 +277,9 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
     @Override
     protected int doWriteBytes(ByteBuf buf) throws Exception {
+        /**
+         * buf可读的字节数是writeIndex-readIndex，即可以发送出去的自己数，然后向channel写入这么多字节，但channel不一定能全部写入。
+         */
         final int expectedWrittenBytes = buf.readableBytes();
         return buf.readBytes(javaChannel(), expectedWrittenBytes);
     }
@@ -287,6 +290,11 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         return region.transferTo(javaChannel(), position);
     }
 
+    /**
+     * 对于client端，对于NioEventLoop循环中，写事件会触发doWrite
+     * @param in
+     * @throws Exception
+     */
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
         for (;;) {
@@ -302,7 +310,15 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
             // Ensure the pending writes are made of ByteBufs only.
             ByteBuffer[] nioBuffers = in.nioBuffers();
+            /**
+             * channeloutboundbuffer中的NIO_BUFFERS（ByteBuffer[]）用来存放要发送的数据
+             * nioBufferCnt为需要发送的buffer个数
+             * 注意，每个完整的请求数据包可能占多个buffer，而且每次执行doWrite会能发多少数据发送多少数据
+             */
             int nioBufferCnt = in.nioBufferCount();
+            /**
+             * expectedWrittenBytes是所有待发送的buffer的数据总量
+             */
             long expectedWrittenBytes = in.nioBufferSize();
             SocketChannel ch = javaChannel();
 
@@ -317,6 +333,9 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     // Only one ByteBuf so use non-gathering write
                     ByteBuffer nioBuffer = nioBuffers[0];
                     for (int i = config().getWriteSpinCount() - 1; i >= 0; i --) {
+                        /**
+                         * 发送nioBuffer到socket缓冲区，但不一定能一次全都发出去，因为发送缓冲区可能满
+                         */
                         final int localWrittenBytes = ch.write(nioBuffer);
                         if (localWrittenBytes == 0) {
                             setOpWrite = true;
@@ -348,6 +367,9 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
             }
 
             // Release the fully written buffers, and update the indexes of the partially written buffer.
+            /**
+             * 释放掉已经发送的数据，即更新
+             */
             in.removeBytes(writtenBytes);
 
             if (!done) {
