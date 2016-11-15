@@ -637,7 +637,8 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 ops &= ~SelectionKey.OP_CONNECT;
                 k.interestOps(ops);
                 /**
-                 * unsafe.finishConnect()方法里会调到注册该channel的读事件
+                 * unsafe.finishConnect()方法里会执行注册该channel的读事件
+                 * 后面有读事件发生就能处理了
                  */
                 unsafe.finishConnect();
             }
@@ -645,12 +646,19 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             // Process OP_WRITE first as we may be able to write some queued buffers and so free memory.
             if ((readyOps & SelectionKey.OP_WRITE) != 0) {
                 // Call forceFlush which will also take care of clear the OP_WRITE once there is nothing left to write
+                /**
+                 * 写事件，将channeloutboundbuffer中的数据flush到socket缓冲区里
+                 */
                 ch.unsafe().forceFlush();
             }
 
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
+                /**
+                 * 对于NioSocketChannel，触发的是read事件，unsafe为NioByteUnsafe，read为处理真正的读事件，从socket读取数据
+                 * 对于NioServerSocketChannel，触发的是accept事件，unsafe为NioMessageUnsafe，read方法为获取建立好连接的NioSocketChannel传递给worker NioEventLoopGroup处理
+                 */
                 unsafe.read();
                 if (!ch.isOpen()) {
                     // Connection already closed - no need to handle write.
