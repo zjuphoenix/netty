@@ -636,7 +636,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 int ops = k.interestOps();
                 ops &= ~SelectionKey.OP_CONNECT;
                 k.interestOps(ops);
-
+                /**
+                 * unsafe.finishConnect()方法里会调到注册该channel的读事件
+                 */
                 unsafe.finishConnect();
             }
 

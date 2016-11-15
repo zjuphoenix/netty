@@ -472,8 +472,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
                 /**
-                 * 对于NioServerSocketChannel，首次注册时因为还没绑定，所以isActive为false
-                 * 对于NioSocketChannel，首次注册时已经和server建立好连接了，所以isActive为true
+                 * 针对server端
+                 *      对于NioServerSocketChannel，首次注册时因为还没绑定，所以isActive为false
+                 *      对于NioSocketChannel，首次注册时说明已经与该client建立好连接了，所以isActive为true
+                 * 针对client端
+                 *      对于NioSocketChannel，首次注册时还没有与server建立好连接，所以isActive为false
                  */
                 if (isActive()) {
                     /**
