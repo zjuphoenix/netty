@@ -437,6 +437,12 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
                 cancelledKeys = 0;
                 needsToSelectAgain = false;
+                /**
+                 * ioRatio为允许非io任务执行时间占用总时间的比例，非io任务为select获取感兴趣事件的时间（这里还不确定，也有可能是其他定时任务），io任务为数据读写。
+                 * 该值默认为50，如果该值设为100，那么每次执行非io任务获取到读写事件后，会一次处理所有的读写任务，直到任务队列为空，
+                 * 这对于client NioSocketChannel的NioEventLoop来说，如果对端server繁忙一直没有处理读请求，那么client端就一直发不出去数据而循环封装成异步写task到eventloop的任务队列，这样就没办法处理读请求了，
+                 * 导致client端读缓冲区满，server端也发送不出去，这就造成client和server都因为发送不出去数据而卡住，就一直死在那里了，所有请求都超时
+                 */
                 final int ioRatio = this.ioRatio;
                 if (ioRatio == 100) {
                     try {
