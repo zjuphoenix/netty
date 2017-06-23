@@ -45,6 +45,9 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
 
         this.chunk = chunk;
         this.handle = handle;
+        /**
+         * memory为真正的内存，字节数组byte[]，offset标记分配的内存在chunk的字节数组中的位置，length标记分配的长度
+         */
         memory = chunk.memory;
         this.offset = offset;
         this.length = length;
@@ -69,9 +72,13 @@ abstract class PooledByteBuf<T> extends AbstractReferenceCountedByteBuf {
      * Method must be called before reuse this {@link PooledByteBufAllocator}
      */
     final void reuse(int maxCapacity) {
+        //重新设置最大容量
         maxCapacity(maxCapacity);
+        //重置引用计数为1
         setRefCnt(1);
+        //设置读写索引位置为0
         setIndex0(0, 0);
+        //清除读写标记
         discardMarks();
     }
 

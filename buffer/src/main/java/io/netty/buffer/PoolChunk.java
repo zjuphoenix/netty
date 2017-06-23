@@ -329,6 +329,9 @@ final class PoolChunk<T> implements PoolChunkMetric {
                 subpage = new PoolSubpage<T>(head, this, id, runOffset(id), pageSize, normCapacity);
                 subpages[subpageIdx] = subpage;
             } else {
+                /**
+                 * 使用subpage之前把它放到arena的tinySubpagePools或smallSubpagePools中
+                 */
                 subpage.init(head, normCapacity);
             }
             return subpage.allocate();

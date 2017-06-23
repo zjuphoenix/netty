@@ -252,7 +252,7 @@ public abstract class Recycler<T> {
             owner = new WeakReference<Thread>(thread);
             /**
              * 每次创建WeakOrderQueue时会更新WeakOrderQueue所属的stack的head为当前WeakOrderQueue， 当前WeakOrderQueue的next为stack的之前head，
-             * 这样把该stack的WeakOrderQueue通过链表串起来了，当下次stack中没有可用对象需要从WeakOrderQueue中转移对象时通过WeakOrderQueue链表的head进行转移。
+             * 这样把该stack的WeakOrderQueue通过链表串起来了，当下次stack中没有可用对象需要从WeakOrderQueue中转移对象时从WeakOrderQueue链表的head进行scavenge转移到stack的对DefaultHandle数组。
              */
             synchronized (stack) {
                 next = stack.head;
@@ -332,6 +332,10 @@ public abstract class Recycler<T> {
                 return false;
             }
 
+            /**
+             * 如果head Link的readIndex到达了Link的容量LINK_CAPACITY，说明该Link已经被scavengge完了。
+             * 这时需要把下一个Link作为新的head Link。
+             */
             if (head.readIndex == LINK_CAPACITY) {
                 if (head.next == null) {
                     return false;
@@ -340,24 +344,45 @@ public abstract class Recycler<T> {
             }
 
             final int srcStart = head.readIndex;
+            /**
+             * head Link的回收对象数组的最大位置
+             */
             int srcEnd = head.get();
+            /**
+             * head Link可以scavenge的DefaultHandle的数量
+             */
             final int srcSize = srcEnd - srcStart;
             if (srcSize == 0) {
                 return false;
             }
 
             final int dstSize = dst.size;
-            final int expectedCapacity = dstSize + srcSize;
 
+            /**
+             * 每次会尽可能scavenge整个head Link，如果head Link的DefaultHandle数组能全部迁移到stack中，stack的DefaultHandle数组预期容量
+             */
+            final int expectedCapacity = dstSize + srcSize;
+            /**
+             * 如果预期容量大于stack的DefaultHandle数组最大长度，说明本次无法将head Link的DefaultHandle数组全部迁移到stack中
+             */
             if (expectedCapacity > dst.elements.length) {
                 final int actualCapacity = dst.increaseCapacity(expectedCapacity);
                 srcEnd = min(srcStart + actualCapacity - dstSize, srcEnd);
             }
 
             if (srcStart != srcEnd) {
+                /**
+                 * head Link的DefaultHandle数组
+                 */
                 final DefaultHandle[] srcElems = head.elements;
+                /**
+                 * stack的DefaultHandle数组
+                 */
                 final DefaultHandle[] dstElems = dst.elements;
                 int newDstSize = dstSize;
+                /**
+                 * 迁移head Link的DefaultHandle数组到stack的DefaultHandle数组
+                 */
                 for (int i = srcStart; i < srcEnd; i++) {
                     DefaultHandle element = srcElems[i];
                     if (element.recycleId == 0) {
@@ -384,7 +409,9 @@ public abstract class Recycler<T> {
 
                     this.head = head.next;
                 }
-
+                /**
+                 * 迁移完成后更新原始head Link的readIndex
+                 */
                 head.readIndex = srcEnd;
                 if (dst.size == newDstSize) {
                     return false;
@@ -507,6 +534,9 @@ public abstract class Recycler<T> {
             boolean success = false;
             WeakOrderQueue prev = this.prev;
             do {
+                /**
+                 * 将当前WeakOrderQueue的head Link的DefaultHandle数组转移到stack的DefaultHandle数组中
+                 */
                 if (cursor.transfer(this)) {
                     success = true;
                     break;
@@ -593,9 +623,8 @@ public abstract class Recycler<T> {
             // so we null it out; to ensure there are no races with restoring it later
             // we impose a memory ordering here (no-op on x86)
             /**
-             * 每个线程有1个stack->WeakOrderQueue映射，
-             * 当回收对象到其它线程stack时会将对象放到其它线程stack的WeakOrderQueue中，
-             * 这个数据结构用于查找其它线程stack对应的WeakOrderQueue
+             * Recycler有1个stack->WeakOrderQueue映射，每个stack会映射到1个WeakOrderQueue，这个WeakOrderQueue是该stack关联的其它线程WeakOrderQueue链表的head WeakOrderQueue。
+             * 当其它线程回收对象到该stack时会创建1个WeakOrderQueue中并加到stack的WeakOrderQueue链表中。
              */
             Map<Stack<?>, WeakOrderQueue> delayedRecycled = DELAYED_RECYCLED.get();
             WeakOrderQueue queue = delayedRecycled.get(this);
